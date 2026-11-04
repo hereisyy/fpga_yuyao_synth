@@ -1,0 +1,27 @@
+# iverilog / vvp 编译产物与运行日志
+docs_tests/_build/
+*.vvp
+*.vcd
+*.lxt
+*.lxt2
+*.fst
+
+# 综合与布局布线产物（Gowin）
+impl/
+*.fs
+*.rao
+*.rpt
+*.log
+
+# 仿真波形导出
+*.gtkw
+*.sav
+
+# 操作系统与编辑器杂项
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.bak
+*.swp
+__pycache__/

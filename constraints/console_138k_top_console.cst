@@ -1,0 +1,89 @@
+// ============================================================
+//  console_138k.cst —— Sipeed Tang Console 138K 的引脚约束（全系统构建）
+//
+//  归属：**目标 B**（全系统顶层 `top_console.v`）。
+//        P2 单独冒烟的目标 A 用 `p2_smoke.cst`，两者**不要混用**。
+//
+//  器件：GW5AST-LV138PG484AC1/I0（IDE：PBG484A + Device Version B）
+//  约束来源：Console 32001C 原理图 Rev1.3 + UG986「Pin List PG484A」逐 ball 核对
+//            （Sipeed **没有**发布 Console 的 .cst，这份是自己写的）
+//
+//  ⚠️ 三条会烧 IO / 让板子没反应的坑：
+//    ① `sys_rst_n = F4` 在 **BANK7 = 1.5 V** ⇒ 必须 `LVCMOS15` + `BANK_VCCIO=1.5`。
+//       抄成 LVCMOS33 会烧 IO。
+//    ② `PA_EN` 接的是 MAX98357A 的 `SD_MODE`，**高电平才开**（60K 时代是低有效）。
+//       代码里 top_console 已写死 1'b1，这里只约束电平。
+//    ③ 用户 RGB 三路**极性不一致**（R/B 经 PMOS 反相、G 直连），
+//       top_console 里是逐路处理的，这里只管电平。
+//
+//  ⚠️ `IO_LOC` 的对象名必须与**顶层端口名**逐字一致。
+//     若综合后报"所有对象都找不到"，第一嫌疑是**顶层选错了**
+//     （拿 top_console 配了 p2_smoke.cst，或反过来）。
+// ============================================================
+
+// ---------------- 系统时钟 / 复位 ----------------
+IO_LOC  "sys_clk"        V22;   // SOM 的 Y1100 50 MHz 有源晶振 → R973 0R → V22
+IO_PORT "sys_clk"        IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC  "sys_rst_n"      F4;    // SOM 复位键 BANK7_F4_CPU_RESET
+IO_PORT "sys_rst_n"      IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ---------------- 音频（MAX98357A，标准 I2S）----------------
+IO_LOC  "HP_BCK"         Y17;   // = IOB91A，BANK5
+IO_PORT "HP_BCK"         IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "HP_WS"          AB17;  // = IOB80B，BANK5
+IO_PORT "HP_WS"          IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "HP_DIN"         AA16;  // = IOB78B，BANK5
+IO_PORT "HP_DIN"         IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "PA_EN"          Y14;   // = IOB85B，BANK5 = MAX98357A 的 SD_MODE（**高有效**）
+IO_PORT "PA_EN"          IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- 板载键（内部上拉 ⇒ 低有效）----------------
+IO_LOC  "key_raw_pin[0]" AA13;  // EX_KEY.0 = 演示档位循环
+IO_PORT "key_raw_pin[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "key_raw_pin[1]" AB13;  // EX_KEY.1 = 音色（加法 ↔ FM）
+IO_PORT "key_raw_pin[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+// ⚠️ 没有 key_raw_pin[2]：EX_KEY.2 = Y12 原理图上**没接按键**，RTL 里也删掉了这一位。
+
+// ---------------- 用户 LED（Console 只有 1 颗 RGB，但只有 G 能用）----------------
+//  ⚠️ 2026-10-25 实测（Gowin P&R 报 PR2017 + PR2028）：
+//     这颗 RGB 的三路接的是 SOM 的 READY / SYS_ACT / DONE 三个网络，而
+//       U12 = ~READY  → 在 GW5AST-138/PG484 上是**配置专用脚**，不能当普通 IO
+//       G11 = ~DONE   → 同上
+//     只有 V13 = SYS_ACT 是普通 IO（直连阴极 ⇒ **低 = 亮**）。
+//     ⇒ 端口只有 1 位 `led`，只约束 V13。
+//     想恢复三色：Gowin → Project → Configuration → **Bitstream → Dual-Purpose Pin**
+//     把 READY、DONE 勾成 regular IO，再把 RTL 端口与这三行改回 3 位。
+IO_LOC  "led"            V13;   // = IOB66A，BANK5（直连阴极：低=亮）
+IO_PORT "led"            IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ---------------- 串口调试（板载 BL616 → PC 虚拟串口）----------------
+IO_LOC  "uart_tx"        U15;   // = FPGA_UART.TX = IOB68A，BANK5
+IO_PORT "uart_tx"        IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+
+// ============================================================
+//  ★★ P2 输入段 —— **引脚待硬件确认，整段可替换** ★★
+//  现状：MPR121 模块还没接线，下面这套是 P2 文档里的**候选接法**
+//        （PMOD0 的 IO2..IO6）。确定后只需改这一段的 ball，
+//        RTL 与顶层端口名都不用动。
+//
+//  选脚时的四条硬约束（换脚前逐条核对）：
+//    ① 必须在 **3.3 V 的 bank**（BANK2/3/4/5/10 都是；BANK6/7 是 1.5 V DDR3 专用，不能碰）
+//    ② 不能与音频（Y17/AB17/AA16/Y14）、时钟（V22）、复位（F4）、
+//       板载键（AA13/AB13）、RGB（U12/V13/G11）、串口（U15）冲突
+//    ③ I2C 两根要相邻且**附近有 GND**（线长 ≤15 cm）
+//    ④ 三个机械键的另一端接 GND，靠 FPGA 内部上拉 ⇒ PULL_MODE=UP
+//
+//  备选：PMOD 的 IO0/IO1 在早期文档里写作 V18/V19，但 pintable 里查不到，
+//        已作废；若以后核实可用，可把 SDA/SCL 挪过去。
+// ============================================================
+IO_LOC  "sda_pad"        G21;   // PMOD0_IO2 = IOR53A，BANK2（开漏，靠模块 4.7K 上拉）
+IO_PORT "sda_pad"        IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "scl_pad"        G22;   // PMOD0_IO3 = IOR53B，BANK2
+IO_PORT "scl_pad"        IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "key_dn_raw"     F18;   // PMOD0_IO4 = IOR35A，BANK2  八度 −
+IO_PORT "key_dn_raw"     IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "key_up_raw"     E18;   // PMOD0_IO5 = IOR35B，BANK2  八度 ＋
+IO_PORT "key_up_raw"     IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "sw_glide_raw"   C22;   // PMOD0_IO6 = IOR42A，BANK2  滑音自锁开关
+IO_PORT "sw_glide_raw"   IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+// PMOD0_IO7 = B22 仍然空着，可作第 4 个机械键（颤音开关等）

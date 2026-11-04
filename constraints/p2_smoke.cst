@@ -1,0 +1,42 @@
+// ============================================================
+//  p2_smoke.cst —— **P2 单独上板验证**专用引脚约束
+//
+//  ⚠️ 本文件**只用于**"只验证 P2"的那次构建：顶层 = `p2_smoke_top`。
+//     它自带全部引脚，**不要和 `06_keyboard\console_138k.cst` 混用**
+//     （两份会互相覆盖，且端口名不同：这里叫 `clk`/`rst_n`，
+//      正式顶层叫 `sys_clk`/`sys_rst_n`）。
+//
+//  球号来源：`10_引脚表_从Console原理图提取\pintable_p4.txt`（本题已逐个核对）
+// ============================================================
+
+// ---- 系统 ----
+IO_LOC  "clk"            V22;       // SOM 的 Y1100，50 MHz 有源晶振
+IO_PORT "clk"            IO_TYPE=LVCMOS33 PULL_MODE=NONE BANK_VCCIO=3.3;
+IO_LOC  "rst_n"          F4;        // SOM 复位键：BANK7 = 1.5V
+IO_PORT "rst_n"          IO_TYPE=LVCMOS15 PULL_MODE=UP BANK_VCCIO=1.5;
+
+// ---- I2C（开漏，靠 MPR121 模块的 4.7K 上拉）----
+IO_LOC  "sda_pad"        G21;       // PMOD0_IO2 = IOR53A，BANK2
+IO_PORT "sda_pad"        IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "scl_pad"        G22;       // PMOD0_IO3 = IOR53B，BANK2
+IO_PORT "scl_pad"        IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---- 3 个机械键（内部上拉，按下接地）----
+IO_LOC  "key_dn_raw"     F18;       // PMOD0_IO4 = IOR35A，BANK2
+IO_PORT "key_dn_raw"     IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "key_up_raw"     E18;       // PMOD0_IO5 = IOR35B，BANK2
+IO_PORT "key_up_raw"     IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC  "sw_glide_raw"   C22;       // PMOD0_IO6 = IOR42A，BANK2
+IO_PORT "sw_glide_raw"   IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// ---- 串口（经板载 BL616 出 PC 虚拟串口）----
+IO_LOC  "uart_tx"        U15;       // FPGA_UART.TX = IOB68A，BANK5
+IO_PORT "uart_tx"        IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+
+// ---- 调试 RGB（⚠️ 三路极性不一致，见 console_138k.cst 的 LED 段）----
+IO_LOC  "dbg_led_r"      U12;       // = IOB171A/READY，BANK10（READY=1 → 亮）
+IO_PORT "dbg_led_r"      IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "dbg_led_g"      V13;       // = IOB66A，BANK5（直连，SYS_ACT=0 → 亮）
+IO_PORT "dbg_led_g"      IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC  "dbg_led_b"      G11;       // = IOB171B/DONE，BANK10（DONE=1 → 亮）
+IO_PORT "dbg_led_b"      IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
